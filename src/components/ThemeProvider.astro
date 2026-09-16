@@ -1,0 +1,12 @@
+---
+/**
+ * Dark-only: the brand palette is dark-native (the viewer declares
+ * color-scheme: dark and ships no light ramp). Replaces Starlight's default
+ * ThemeProvider, which reads a stored preference — here there is nothing to
+ * read; the theme is forced before first paint.
+ */
+---
+
+<script is:inline>
+	document.documentElement.dataset.theme = 'dark';
+</script>

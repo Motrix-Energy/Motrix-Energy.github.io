@@ -1,0 +1,54 @@
+---
+title: System overview
+description: How devices, connectors, algorithms, storage and the viewer fit together in one local-first energy management system.
+---
+
+import SystemDiagram from '../../../components/SystemDiagram.mdx';
+
+Motrix is two repositories with one contract between them. **Motrix Edge** is the runtime: it reads meters, drives switches and makes decisions at the site, with no internet required. **Motrix Edge View** is the viewer: a single HTML file that draws what the runtime did. Everything on this page is the thirty-second version; every section links to the page that owns the full story.
+
+<SystemDiagram />
+
+## One reading, five hands
+
+**Devices speak protocols into connectors.** A connector owns one transport — an MQTT broker, an HTTP endpoint polled on a schedule, a Modbus TCP socket, a serial LoRa radio, or a replay file standing in for any of them. Its `start()` method is a blocking loop that receives frames and hands each one to the device it belongs to. The connector knows routing and reconnection; it never parses a payload.
+
+**Devices parse payloads.** A device's `receive()` turns raw transport data — an OBIS telegram, a JSON status blob, a register dump — into `self.data`. A payload that yields nothing usable is refused, and the refusal is recorded as a gap rather than a repeat of the previous reading. The device knows its wire format; it never touches a socket.
+
+**Algorithms consume capabilities.** An algorithm asks `isinstance(device, EnergyMeter)`, never `isinstance(device, P1)`. The capability interfaces in [`api/capabilities.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/api/capabilities.py) — `EnergyMeter`, `Switch`, `MetricSource` — are the whole contract between the EMS logic and the hardware underneath it, which is why the same algorithm runs over live MQTT and over last winter replayed from a CSV without a diff.
+
+**Storage fans out.** Every accepted reading and every decision passes through one funnel, `StorageManager`, which forwards it to zero or more backends with per-backend error isolation — a dead InfluxDB never takes the CSV down with it. The two CSV files it writes are not an implementation detail: they are a versioned, published interface.
+
+**The viewer consumes two CSVs and five REST routes.** `device_data.csv` and `algorithm_decisions.csv` are the offline path; `GET /health`, `/devices`, `/devices/{name}`, `/workers` and `/decisions` are the live one. The viewer is fully generic — every device name and chartable field is discovered from the data at load time, so it needs no knowledge of any algorithm or device type.
+
+## The Edge repository, mapped
+
+The [Layout section of the Edge README](https://github.com/Motrix-Energy/motrix-edge/blob/main/README.md#layout) is the authoritative map; this table is a guide for orientation, not a spec.
+
+| Directory | What lives there |
+|---|---|
+| `api/` | The abstractions: `Connector`, `Device`, `Algorithm`, `Service`, `StorageBackend`, the capability interfaces, the `Stoppable` cooperative-stop mixin, and never-raising option coercion |
+| `config/` | Loader, two-layer schema validation, `${VAR}` resolution, enums |
+| `connectors/` `devices/` `algorithms/` `storage/` `services/` | The five plugin axes, one module per plugin, each with its own options schema beside it |
+| `parsers/` | OBIS telegram parsing with CRC16-ARC, for P1 meters |
+| `devices_manager/` | Thread-safe singleton device registry — what algorithms read snapshots from |
+| `storage_manager/` | The write fan-out, with per-backend error isolation |
+| `supervisor/` | Restart policy and worker lifecycle |
+| `simulation/` | The replay clock: event time, committed step time, and the lockstep barrier |
+| `examples/` | The golden fixture and the adversarial one |
+
+`main.py` is the only entry point: it loads the config, instantiates every plugin by naming convention, wires devices to their connectors, and supervises the lot in daemon threads. There is no registry and no central import list — a new plugin is a new module plus a config entry.
+
+The viewer is a sibling repository, [`motrix-edge-view`](https://github.com/Motrix-Energy/motrix-edge-view/blob/main/README.md): one Lit + TypeScript app built into one self-contained `index.html`. Both repositories are pinned to the same storage format version — the full family picture, including who pins what, is on [What is Motrix?](/start/what-is-motrix/).
+
+## Where to next
+
+Every page in this group is one hop from here:
+
+- [The plugin system](/architecture/plugins/) — how a config entry becomes a live class, and why your constructor signature is your options schema.
+- [Data flow: wire to decision](/architecture/data-flow/) — the exact call sequence from a frame on the wire to a command back out of it.
+- [Time, replay and determinism](/architecture/time-and-replay/) — the two clocks, the lockstep barrier, and why any device is backtestable.
+- [Lifecycle: supervision, liveness, shutdown](/architecture/lifecycle/) — what happens when a worker crashes, finishes, or is asked to stop.
+- [Security model](/architecture/security/) — why the viewer's nginx is the only authentication in the system, and what that obliges you not to do.
+
+Ready to run it instead? The [quickstart](/start/quickstart/) takes about a second. Ready to build? Start with [your first connector](/contribute/your-first-connector/).

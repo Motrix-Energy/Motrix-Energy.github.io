@@ -1,0 +1,18 @@
+{/*
+  The system diagram, adapted from the README shared by motrix-edge and
+  motrix-edge-view. One source, imported wherever the picture is needed —
+  do not paste a second copy of this diagram into a page.
+*/}
+
+```mermaid
+flowchart LR
+  DEV["Meters · switches · inverters"]
+  EDGE["Motrix Edge<br/>connectors · algorithms · supervision"]
+  VIEW["Motrix Edge View<br/>timeline · charts"]
+  DEV -->|"MQTT · Modbus · HTTP · LoRa"| EDGE
+  EDGE -->|"device_data.csv<br/>algorithm_decisions.csv"| VIEW
+  EDGE -.->|"REST · /health /devices /decisions"| VIEW
+  style DEV  fill:#12293A,stroke:#8FA3B0,stroke-width:1px,color:#AFC2CD
+  style EDGE fill:#0B1E2D,stroke:#2FE6C8,stroke-width:2px,color:#E6EEF2
+  style VIEW fill:#0B1E2D,stroke:#FFB443,stroke-width:2px,color:#E6EEF2
+```

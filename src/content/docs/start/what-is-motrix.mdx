@@ -1,0 +1,114 @@
+---
+title: What is Motrix?
+description: The thesis behind Motrix, the two repositories that make it up, and the versioned contract that joins them.
+---
+
+import SystemDiagram from '../../../components/SystemDiagram.mdx';
+
+Motrix is an extensible, local-first energy management system, built so that the
+**algorithm** and the **infrastructure underneath it** can be written in parallel, by
+different people, without either one reading the other's code.
+
+An algorithm asks an energy meter for its total and tells a switch to close. Whether that
+meter is a P1 port behind an MQTT broker, an HTTP-polled inverter, or last winter replayed
+from a CSV is a question the algorithm never has to answer — and never gets to ask. The
+sentence holds turned around, too: a new connector ships without touching a single
+algorithm.
+
+That separation is not a convention to be respected; it is enforced by the architecture.
+Algorithms see devices only through **capability interfaces** — an `isinstance` check
+against `EnergyMeter` or `Switch`, never a concrete device class — so a meter written next
+year is picked up by an algorithm written today, without a diff on either side. The
+[data flow page](/architecture/data-flow/) traces exactly how a reading on the wire
+becomes a decision on a device.
+
+## One system, two repositories
+
+<SystemDiagram />
+
+Devices speak their own protocols to **Motrix Edge**, the runtime. Edge writes two CSV
+files, and optionally serves a small read-only REST API. **Motrix Edge View**, the viewer,
+reads the files — and, when an EMS is reachable, the API — and puts readings and decisions
+on one synchronised timeline. The full tour of this picture, component by component, is on
+the [system overview](/architecture/overview/).
+
+## The Motrix family
+
+| | What it is | Ships as |
+|---|---|---|
+| **[Motrix Edge](https://github.com/Motrix-Energy/motrix-edge)** | The runtime — connectors, algorithms, supervision, storage. One site, local-first, no internet required. | A Python 3.12+ application: `python main.py --config config.json`, or a container. |
+| **[Motrix Edge View](https://github.com/Motrix-Energy/motrix-edge-view)** | The viewer — Edge's two CSVs and its live REST state, on one synchronised timeline. | One self-contained `index.html` you can double-click; also a gated nginx container. |
+
+Both ends of that arrow are pinned to the same **storage format 1.0**:
+`STORAGE_FORMAT_VERSION` in Edge, `motrixStorageFormat` in the viewer's
+[`package.json`](https://github.com/Motrix-Energy/motrix-edge-view/blob/main/package.json),
+and one golden fixture vendored on both sides. A format bump fails a test rather than a
+chart. The format itself is summarised at [storage format 1.0](/reference/storage-format/),
+and the cross-repo bump procedure at
+[changing the storage format](/contribute/storage-format-changes/).
+
+## What Edge is
+
+Edge is a plugin system with five axes — connectors, devices, algorithms, storage
+backends, and services — every one of them declared in `config.json` and loaded by module
+name. A connector speaks a protocol and owns the devices declared against it; a device
+parses one device's payloads and exposes capabilities; an algorithm is the actual EMS
+logic; storage is optional and plural; a service is a supervised worker that owns no
+devices, such as the read-only REST API. There is no registry to edit and no import to
+add: a new plugin is a new module plus a config entry.
+
+The [plugin system page](/architecture/plugins/) explains the loading convention and the
+contracts each axis signs up to; the [plugin catalogue](/reference/plugin-catalog/) lists
+everything that ships in the box, from the `mqtt` connector to the `p1` meter to the
+`csv_file` backend.
+
+Two properties matter more than the feature list:
+
+- **Everything is supervised.** Each connector, algorithm and service runs in its own
+  supervised thread; a crash is logged and restarted with bounded backoff, and a clean
+  return is not restarted. See [lifecycle](/architecture/lifecycle/).
+- **Everything is replayable.** The `pseudo` connector replays a timestamped file through
+  the same code paths as live hardware, in lockstep with the algorithms, so a backtest is
+  deterministic down to the byte. See
+  [time, replay and determinism](/architecture/time-and-replay/).
+
+## What the viewer is
+
+Motrix Edge View is an offline, single-file viewer for Edge's output. It ships as one
+`index.html` with every dependency inlined: no server, no install, no network. An EMS
+lives on a site LAN, and a debugging tool that needs the internet to render is the wrong
+shape.
+
+The viewer is fully generic — every device name, algorithm name and chartable field is
+discovered from the data at load time, so it works with devices and algorithms that did
+not exist when it was written. Datasets are a list, not a switch: load two backtests side
+by side, or a live EMS beside a file, and compare them on one chart.
+[Using the viewer](/operate/viewer/) covers the three ways to get it and what each page
+shows.
+
+## Why the split
+
+The two repositories mirror the system's own thesis one level up. Edge does not know the
+viewer exists; it writes CSV files whose format is a versioned, normative contract, and
+serves a REST API that any client may poll. The viewer does not know Edge's internals; it
+reads the contract. Either side can move — a new device kind, a new chart — without a
+coordinated release, and the vendored golden fixture is what catches the one change that
+does need coordination.
+
+That is also why the contribution story splits cleanly: an energy expert can write and
+backtest an algorithm with no hardware and no infrastructure knowledge
+([recipe](/contribute/algorithms/)), while an integrator can add a protocol with no
+knowledge of any algorithm ([build your first connector](/contribute/your-first-connector/)).
+
+## Provenance and licence
+
+Both repositories are licensed under the Apache License 2.0, copyright Radisio, and are
+part of the Locomotrice project. There is no telemetry, no account, and no cloud
+dependency; the licence and NOTICE files travel with each repository.
+
+## Where next
+
+- Run it: the [quickstart](/start/quickstart/) takes about a second and needs no hardware.
+- See it: [from replay to timeline](/start/replay-to-timeline/) puts that run on a chart.
+- Extend it: [build your first connector](/contribute/your-first-connector/) is the
+  flagship guide.

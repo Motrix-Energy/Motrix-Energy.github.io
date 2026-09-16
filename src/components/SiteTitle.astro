@@ -1,0 +1,62 @@
+---
+/**
+ * Brand lockup, replicated from motrix-edge-view's motrix-navbar.ts: the mark,
+ * then "motrix" (17px / 800 / -0.03em) over the kicker "DOCS" (8px / 600 /
+ * 0.18em, accent). The wordmark is live text so it sets in real Archivo; the
+ * mark is the one inline SVG in the chrome and takes a suffixed gradient id
+ * (motrix-flow-nav) so it can never collide with a mark referenced by file
+ * elsewhere on the page.
+ */
+---
+
+<a href="/" class="motrix-brand">
+	<svg viewBox="6 24 108 80" width="34" height="25" aria-hidden="true">
+		<defs>
+			<linearGradient id="motrix-flow-nav" x1="14" y1="0" x2="106" y2="0" gradientUnits="userSpaceOnUse">
+				<stop offset="0" stop-color="#2FE6C8"></stop>
+				<stop offset="1" stop-color="#FFB443"></stop>
+			</linearGradient>
+		</defs>
+		<path
+			d="M22 73 L22 34 L60 70 L98 34 L98 73"
+			fill="none"
+			stroke="url(#motrix-flow-nav)"
+			stroke-width="11"
+			stroke-linecap="round"
+			stroke-linejoin="round"></path>
+		<circle cx="22" cy="88" r="8" fill="none" stroke="#2FE6C8" stroke-width="6.5"></circle>
+		<circle cx="98" cy="88" r="8" fill="none" stroke="#FFB443" stroke-width="6.5"></circle>
+	</svg>
+	<span class="lockup">
+		<span class="word">motrix</span>
+		<span class="kicker">DOCS</span>
+	</span>
+</a>
+
+<style>
+	.motrix-brand {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		text-decoration: none;
+		color: var(--sl-color-white);
+	}
+	.lockup {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.word {
+		font-size: 17px;
+		font-weight: 800;
+		letter-spacing: -0.03em;
+		line-height: 1;
+	}
+	.kicker {
+		font-size: 8px;
+		font-weight: 600;
+		letter-spacing: 0.18em;
+		line-height: 1;
+		color: var(--sl-color-accent-high);
+	}
+</style>

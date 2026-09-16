@@ -1,0 +1,69 @@
+---
+title: Motrix Energy
+description: An extensible, local-first energy management system and its offline single-file viewer, open source under Apache-2.0.
+template: splash
+hero:
+  tagline: An extensible, local-first energy management system — built so the algorithm and the infrastructure underneath it can be written in parallel, without either reading the other's code.
+  image:
+    file: ../../assets/motrix-mark.svg
+    alt: Motrix
+  actions:
+    - text: Run it in a minute
+      link: /start/quickstart/
+      variant: primary
+    - text: Build a connector
+      link: /contribute/your-first-connector/
+      variant: secondary
+    - text: GitHub
+      link: https://github.com/Motrix-Energy
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+	<Card title="Local-first EMS" icon="laptop">
+		Motrix Edge runs at the site and needs no internet to do its job. Devices, algorithms
+		and storage all live on one machine, and a lost uplink costs you nothing but a
+		dashboard. See [how the system fits together](/architecture/overview/).
+	</Card>
+	<Card title="A single-file viewer" icon="document">
+		Motrix Edge View is one `index.html` with every dependency inlined — double-click it,
+		drag in two CSVs, and read what your devices reported and your algorithms decided on
+		one synchronised timeline. See [using the viewer](/operate/viewer/).
+	</Card>
+	<Card title="Plugins, not registries" icon="puzzle">
+		A new connector, device, algorithm, storage backend or service is a new module plus a
+		config entry. There is no registry to edit and no import to add — which is the whole
+		point. See [the plugin system](/architecture/plugins/).
+	</Card>
+	<Card title="Deterministic replay" icon="clock">
+		The `pseudo` connector replays a CSV through the same code paths as live hardware,
+		in lockstep with the algorithms, so the same run produces the same bytes every time.
+		Algorithms cannot tell — that is the test. See
+		[time, replay and determinism](/architecture/time-and-replay/).
+	</Card>
+	<Card title="A versioned contract between repos" icon="approve-check">
+		Both repositories are pinned to storage format 1.0, with one golden fixture vendored
+		on both sides — so a format bump fails a test rather than a chart. See
+		[changing the storage format](/contribute/storage-format-changes/).
+	</Card>
+	<Card title="Open source, Apache-2.0" icon="open-book">
+		Both repositories are Apache-2.0, copyright Radisio, part of the Locomotrice
+		project. No telemetry, no account, no cloud dependency. Start with
+		[what Motrix is](/start/what-is-motrix/).
+	</Card>
+</CardGrid>
+
+## Which are you?
+
+**Evaluating?** Read [what Motrix is](/start/what-is-motrix/) — the thesis, the two
+repositories, and the contract between them, on one page.
+
+**Operating a site?** The [quickstart](/start/quickstart/) gives you a working run in
+about a second, and [configuration](/operate/configuration/) explains the file that wires
+a real one.
+
+**Contributing?** Go straight to
+[build your first connector](/contribute/your-first-connector/) — a complete, hardware-free
+walkthrough of the extension path the architecture was designed around.

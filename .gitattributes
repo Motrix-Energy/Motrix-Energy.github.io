@@ -1,0 +1,7 @@
+# Source is LF everywhere, regardless of the contributor's core.autocrlf.
+* text=auto eol=lf
+
+# The vendored typeface is bytes; a normalised woff2 is a corrupt woff2.
+*.woff2 -text
+*.png -text
+*.webp -text

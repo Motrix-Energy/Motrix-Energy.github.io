@@ -1,0 +1,204 @@
+/**
+ * Motrix brand theme for Starlight — the "Modernist" system.
+ *
+ * Flat, architectural, set entirely in Archivo, zero corner radius, no
+ * shadows, organized by the strength of its rules rather than by whitespace.
+ *
+ * Tokens are mirrored from motrix-edge-view/index.html's :root — that file is
+ * the source of truth; change hexes there first. The site is dark-only, like
+ * the product: the palette was designed against the navy ground and brand
+ * teal #2FE6C8 is unreadable on white (~1.6:1).
+ *
+ * Starlight's own styles live inside CSS cascade layers and customCss files
+ * are unlayered, so plain rules here win without !important — the exceptions
+ * are called out where they occur.
+ */
+
+/* ---------------------------------------------------------------- */
+/* Brand tokens (verbatim from the viewer, plus the two dark teals)  */
+/* ---------------------------------------------------------------- */
+:root {
+	--motrix-navy: #0B1E2D;
+	--motrix-panel: #12293A;
+	--motrix-raised: #1B3648;
+	--motrix-border: #244358;
+	--motrix-text: #E6EEF2;
+	--motrix-text-2: #AFC2CD;
+	--motrix-text-3: #8FA3B0;
+	--motrix-teal: #2FE6C8; /* 7.96:1 on navy; never ink on light surfaces */
+	--motrix-teal-mid: #159E88;
+	--motrix-amber: #FFB443;
+	--motrix-success: #97CD86;
+	--motrix-warning: #FFD166;
+	--motrix-error: #FF8A7A;
+}
+
+/* ---------------------------------------------------------------- */
+/* Starlight mapping — dark, the only theme                          */
+/* ---------------------------------------------------------------- */
+:root {
+	/* Accent triad. -high is the text/ink carrier in dark mode; teal
+	 * surfaces carry navy ink via --sl-color-text-invert below. */
+	--sl-color-accent-low: #0E3E37; /* derived dark-teal surface */
+	--sl-color-accent: var(--motrix-teal-mid);
+	--sl-color-accent-high: var(--motrix-teal);
+
+	/* Gray ramp. Anchors are brand tokens; gray-1 and gray-4 are derived
+	 * intermediates (gray-4 is for non-text uses only — it does not clear
+	 * WCAG AA on the raised background). */
+	--sl-color-white: var(--motrix-text);
+	--sl-color-gray-1: #CBD8E0;
+	--sl-color-gray-2: var(--motrix-text-2);
+	--sl-color-gray-3: var(--motrix-text-3);
+	--sl-color-gray-4: #5C7484;
+	--sl-color-gray-5: var(--motrix-border);
+	--sl-color-gray-6: var(--motrix-panel);
+	--sl-color-black: var(--motrix-navy);
+
+	--sl-color-bg: var(--motrix-navy);
+	--sl-color-bg-nav: var(--motrix-panel);
+	--sl-color-bg-sidebar: var(--motrix-panel);
+	--sl-color-bg-inline-code: var(--motrix-raised);
+	--sl-color-hairline: var(--motrix-border);
+	--sl-color-hairline-light: var(--motrix-border);
+	--sl-color-hairline-shade: var(--motrix-border);
+
+	/* Primary buttons and the active sidebar item are teal surfaces, and a
+	 * teal surface carries navy ink, never #fff — white on this accent is
+	 * 1.6:1. */
+	--sl-color-text-invert: var(--sl-color-black);
+
+	/* Aside hues → brand statuses. The -low surfaces are derived dark
+	 * mixes of the status hue over the navy ground; -high carries text. */
+	--sl-color-orange-low: #3A2E17;
+	--sl-color-orange: var(--motrix-amber);
+	--sl-color-orange-high: var(--motrix-warning);
+	--sl-color-red-low: #3F201C;
+	--sl-color-red: var(--motrix-error);
+	--sl-color-red-high: #FFC4BA;
+	--sl-color-green-low: #26331F;
+	--sl-color-green: var(--motrix-success);
+	--sl-color-green-high: #C4E4B8;
+
+	--sl-font: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	--sl-font-mono: 'Consolas', 'SF Mono', 'Fira Code', monospace;
+
+	/* Wider than Starlight's 45rem, because the reference tables are five
+	 * columns of identifiers and 45rem crushed them. Paragraphs are held to
+	 * 68ch further down, so the extra width goes to tables, code blocks and
+	 * diagrams and never to the reading measure — the same split the viewer
+	 * makes with a 1180px page around 68ch prose. */
+	--sl-content-width: 56rem;
+
+	/* Nothing floats. */
+	--sl-shadow-sm: none;
+	--sl-shadow-md: none;
+	--sl-shadow-lg: none;
+
+	color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------- */
+/* Modernist structure                                               */
+/* ---------------------------------------------------------------- */
+
+/* Zero corner radius, everywhere. Starlight's layered styles lose to a plain
+ * rule; the !important is for Pagefind's unlayered search-UI stylesheet. The
+ * favicon's rounded app-icon squircle is the brand's one sanctioned
+ * exception, and it is an image, so this rule cannot reach it. */
+*,
+*::before,
+*::after {
+	border-radius: 0 !important;
+}
+
+/* No box shadows — targeted rather than universal, so a focus style a future
+ * dependency implements as box-shadow is not silently erased. */
+dialog,
+.card,
+.starlight-aside,
+site-search dialog {
+	box-shadow: none;
+}
+
+/* Focus ring — the viewer's exact treatment. */
+:focus-visible {
+	outline: 2px solid var(--sl-color-accent-high);
+	outline-offset: 2px;
+}
+
+/* The navbar rule is 2px, not a hairline: the system organizes with the
+ * strength of its dividers, and this is the page's one major rule. */
+header.header {
+	border-bottom: 2px solid var(--sl-color-hairline-shade);
+}
+
+/* Headings tighten; weight carries hierarchy. Only 500/600/800 exist. */
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.hero h1,
+h1 {
+	font-weight: 800;
+	letter-spacing: -0.02em;
+}
+.sl-markdown-content h3,
+.sl-markdown-content h4 {
+	font-weight: 600;
+	letter-spacing: -0.02em;
+}
+
+/* Prose measure: 68ch, as in the brand spec. The content column is wider than
+ * the measure (see --sl-content-width above) so tables, code blocks and
+ * diagrams get room while paragraphs keep their line length. */
+.sl-markdown-content p,
+.sl-markdown-content li {
+	max-width: 68ch;
+}
+
+/* Identifiers are never broken mid-token.
+ *
+ * Starlight sets `overflow-wrap: anywhere` on inline code. Two things follow
+ * from `anywhere` and only the first is wanted: a token may break rather than
+ * overflow, and — the damaging half — the element's intrinsic minimum width
+ * collapses to one character, so a table column shrinks to nothing and splits
+ * `home_assistant` across three lines. `break-word` keeps the safety valve and
+ * leaves intrinsic width alone, so a column is at least as wide as its longest
+ * identifier and the break never happens in practice. */
+.sl-markdown-content code {
+	overflow-wrap: break-word;
+}
+
+/* In a table cell a token stays whole outright. A cell is a label, not prose:
+ * `docs/storage-format.md` split after its slash is the same defect as a split
+ * word, and a path has no good place to break. If that ever makes a table wider
+ * than the page, the table scrolls — which is legible, unlike a shredded
+ * identifier. */
+.sl-markdown-content :is(td, th) code {
+	white-space: nowrap;
+}
+
+/* A cell holds a phrase, not a column of single words. This is a floor, not a
+ * width: auto layout still gives a prose column the room it needs, and a table
+ * genuinely too wide for the page scrolls inside its own box — Starlight
+ * already makes the table a block with `overflow: auto`. */
+.sl-markdown-content :is(td, th) {
+	min-width: 5rem;
+}
+
+/* Accent-flag callouts: a 3px left rule, flat. */
+.starlight-aside {
+	border-inline-start-width: 3px;
+}
+
+/* Kicker utility — uppercase, wide-tracked, teal. For hero/landing use. */
+.motrix-kicker {
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--sl-color-accent-high);
+}
+
+.hero .tagline {
+	color: var(--sl-color-gray-2);
+}

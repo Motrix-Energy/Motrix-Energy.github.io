@@ -1,0 +1,52 @@
+# Builds the site and deploys it to GitHub Pages on every push to main.
+#
+# One-time setup before the first deploy: repository Settings → Pages →
+# Source: "GitHub Actions".
+#
+# Actions are pinned to full commit SHAs, not tags: a tag can be moved to
+# malicious code after review, a SHA cannot. To re-resolve a pin:
+#   https://api.github.com/repos/<owner>/<repo>/commits/<tag> → .sha
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Jobs declare exactly what they need; nothing inherits a write-scoped default.
+permissions: {}
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Otherwise the token is written into .git/config as an
+          # http.extraheader and stays there for the rest of the job.
+          persist-credentials: false
+
+      # Installs with npm ci (the lockfile is the pin), runs `astro build`,
+      # and uploads the Pages artifact.
+      - uses: withastro/action@e84f40bd8d2caa9e768ec82ad30dd81f0b280853 # v6.1.2
+        with:
+          node-version: 22
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write # deploy the artifact
+      id-token: write # OIDC token for the Pages deployment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
