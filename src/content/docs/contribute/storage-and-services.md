@@ -41,7 +41,9 @@ If your backend talks to a network service, time a real shutdown against an *unr
 
 ### `CsvFileBackend` is a published interface
 
-One backend is special: `CsvFileBackend`'s two files are parsed by an external application (Motrix Edge View), so their headers, dialect, timestamp shape and gap semantics are frozen by the normative contract and pinned byte-for-byte by `tests/test_storage_contract.py`. Changing that backend's output is a cross-repo breaking change — read [/contribute/storage-format-changes/](/contribute/storage-format-changes/) first. Every *other* backend answers only to its own store and shapes its output as it likes.
+One backend is special: `CsvFileBackend`'s two files are parsed by an external application (Motrix Edge View), so their headers, dialect, timestamp shape and gap semantics are frozen by the normative contract and pinned byte-for-byte by `tests/test_storage_contract.py`. Changing that backend's output is a cross-repo breaking change — read [/contribute/storage-format-changes/](/contribute/storage-format-changes/) first.
+
+Every *other* backend answers only to its own store and shapes its output as it likes, **with one reservation**: `device_data.csv` and `algorithm_decisions.csv` under a backend's `output_dir` are format 1.0 by name and by column shape, and the viewer identifies them by shape. A backend writing either name with those columns produces a file the viewer reads as a Motrix Edge run, with none of the byte-exactness the fixture comparison guarantees — so only a backend that passes it should emit them. `StorageManager` also warns at startup when two registered backends resolve to the same `output_dir`: two `csv_file` entries on one directory interleave their rows into a single file, with the header decided from the size on disk at open time and nothing marking the seam.
 
 ## Services
 
@@ -57,9 +59,9 @@ Every service constructor receives `devices_manager` and `supervisor`, injected 
 
 Your `services/<class>.schema.json` describes the config `options` keys, **minus** `devices_manager` and `supervisor` — those never come from config, and declaring either would let a config entry collide with the injected value and fail instantiation with "got multiple values".
 
-### `SystemExit` is swallowed — make exit paths explicit
+### `SystemExit` is not a crash — make exit paths explicit
 
-A library that calls `sys.exit()` on failure raises `SystemExit`, which is a `BaseException`: the supervisor catches `Exception`, and `threading.excepthook` silently swallows `SystemExit` — so the thread dies with **no log line, no crash and no restart**, without ever marking itself finished. Catch it and re-raise something that inherits from `Exception`. [`services/rest_api.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/services/rest_api.py) does exactly this; uvicorn's failure to bind a port is the real-world case.
+A library that calls `sys.exit()` on failure raises `SystemExit`, which is a `BaseException`. The supervisor has a branch for it: the worker is logged CRITICAL, marked finished, and deliberately **not restarted** — a worker that exits is treated as having given up rather than having failed. That is usually right, and for a port that is momentarily held by something else it is wrong. Catch it and re-raise something that inherits from `Exception`, which is what buys the bounded retry a crash gets. [`services/rest_api.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/services/rest_api.py) does exactly this; uvicorn's failure to bind a port is the real-world case.
 
 The other race worth designing against: a `stop()` arriving *before* `start()` must still be honoured — guard the top of `start()` with `if self.is_stopping(): return`, and re-check under a lock after building the resource, or a shutdown that races startup binds a port and leaks it.
 

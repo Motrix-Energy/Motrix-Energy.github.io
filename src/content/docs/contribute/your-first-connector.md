@@ -27,7 +27,8 @@ sequenceDiagram
 	C->>C: open transport
 	C->>F: on_connected()
 	loop each inbound payload
-		C->>D: receive(payload)
+		C->>C: deliver(device, payload)
+	C->>D: receive(payload)
 		D-->>C: accepted (False = nothing usable)
 		C->>F: on_device_data_received(device, accepted)
 		Note over F: marks device ready, publishes to<br/>algorithms, fans out to storage
@@ -115,8 +116,7 @@ Three things to see, in order of importance.
 		if device is None:
 			self.LOGGER.warning(f"No device listens for '{device_name}', skipping")
 			return
-		accepted = device.receive(payload)
-		self.on_device_data_received(device, accepted)
+		self.deliver(device, payload)
 
 	def _device_for(self, device_name: str) -> Optional[Device]:
 		for device in self.devices.values():
@@ -129,8 +129,9 @@ Walk the dispatch path slowly, because it is the heart of every connector:
 
 - **`self.on_connected()`, once, when the transport is up.** It marks write-only devices connected — a device that only receives commands has no inbound payload to prove the link is alive, so the connector vouches for it.
 - **Routing goes through `device.listener_options`.** You received `self.devices` via `inject_devices()` before `start()` ran — it maps *config names* to `Device` objects. But the first column of our file is the *transport's* name for the source, and those are different vocabularies: `listener_options` is where each device declares what it listens for on your transport (a topic filter on MQTT, an endpoint on HTTP, a `name` key here). A connector that routed on config names would force every operator to name their devices after the wire. If the linear scan bothers you, precompute a lookup by overriding `inject_devices()` — call `super().inject_devices(devices)` first; `connectors/http_api.py` is the worked example.
-- **Mirror the arity the device expects.** Our lines carry no topic, so we call `device.receive(payload)` — one argument. `PseudoConnector` does exactly the same when a replay row's topic column is empty, and calls `device.receive(topic, payload)` when it is not. That mirroring is what will make step 8's replay indistinguishable from the live run.
-- **Pass `receive()`'s return value through.** `accepted = device.receive(payload)` then `self.on_device_data_received(device, accepted)`. That one hook does everything downstream: marks the device connected and data-ready, publishes the snapshot to `DevicesManager` so algorithms see it, and fans the reading out to storage. Skip it and algorithms never see the data. And the value you forward matters: a device returns `False` when the payload gave it nothing usable, and forwarding that is what keeps a corrupt frame out of storage — recorded as a gap, not as the previous reading republished under a fresh timestamp. [Data flow](/architecture/data-flow/) traces why a gap is the honest answer.
+- **Mirror the arity the device expects.** Our lines carry no topic, so we pass one argument. `PseudoConnector` does exactly the same when a replay row's topic column is empty, and passes `(topic, payload)` when it is not. That mirroring is what will make step 8's replay indistinguishable from the live run.
+- **`self.deliver(device, payload)` is the only way to hand a device a payload.** It calls the device's `receive()`, forwards what came back to the framework hook — which marks the device connected and data-ready, publishes the snapshot to `DevicesManager` so algorithms see it, and fans the reading out to storage — and does both inside one guard. The value it forwards matters: a device returns `False` when the payload gave it nothing usable, and forwarding that is what keeps a corrupt frame out of storage, recorded as a gap rather than the previous reading republished under a fresh timestamp. [Data flow](/architecture/data-flow/) traces why a gap is the honest answer.
+- **The guard is why it exists.** A device is contracted never to raise, but one that does used to end the whole run: the exception escaped your `start()`, the supervisor spent its restart budget, and `main` read the finished worker as "all connectors finished". `deliver()` logs that with its traceback, quietens the repeats, drops the reading and returns `False` — so branch on it if you track per-device failure state. Everything *your* code can raise still belongs in a narrow `except` of your own, because a bug of yours should reach the supervisor.
 - **Sleep with `self.wait_stop(seconds)`, never `time.sleep(seconds)`.** A stop request interrupts `wait_stop` immediately; `time.sleep` waits it out and holds shutdown hostage for up to a full poll interval.
 
 *Normative source:* [Recipe: add a new connector, step 3](https://github.com/Motrix-Energy/motrix-edge/blob/main/CONTRIBUTING.md#recipe-add-a-new-connector).
@@ -273,6 +274,8 @@ Every shipped connector was written by copying the test file whose transport sha
 - [`tests/test_shutdown.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/tests/test_shutdown.py) — the template for proving `stop()` unblocks a blocked `start()` within a bounded timeout. Copy its *pattern* into your own test module — *never* add your connector to that file itself. The reason is [the fourth footgun](/contribute/connector-patterns/).
 
 `pytest` must stay green with no hardware and no network — that bar is the whole test contract, and the [workflow page](/contribute/workflow/) holds you to it.
+
+All three open with `from tests.conftest import …`, which resolves only inside a checkout of `motrix-edge`. The doubles and the threading harness they pull in live in [`api/testing.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/api/testing.py) and import from anywhere — `conftest.py` only re-exports them — so a connector living in its own repository can use the same shapes. The checks this repository runs over its own plugins are in [`api/conformance.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/api/conformance.py); `check_loads` is the one to run first, because it drives the real loader and catches the class-name and `issubclass` mistakes a schema check cannot see. Neither module is a supported API yet.
 
 *Normative source:* [Recipe: add a new connector, step 9](https://github.com/Motrix-Energy/motrix-edge/blob/main/CONTRIBUTING.md#recipe-add-a-new-connector).
 

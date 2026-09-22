@@ -15,6 +15,7 @@ sequenceDiagram
 	participant A as Algorithm
 	Note over T,SM: the data path
 	T->>C: frame arrives in start() loop
+	C->>C: deliver(device, topic, payload)
 	C->>D: receive(topic, payload)
 	D-->>C: accepted (False = nothing usable)
 	C->>C: on_device_data_received(device, accepted)
@@ -39,10 +40,12 @@ sequenceDiagram
 
 ## The data path
 
-A connector's `start()` is a blocking loop that owns the transport. When a frame arrives, the connector looks up the target device — it received the name-to-device mapping at startup via `inject_devices()`, and per-device routing hints live in `device.listener_options` — and makes exactly two calls:
+A connector's `start()` is a blocking loop that owns the transport. When a frame arrives, the connector looks up the target device — it received the name-to-device mapping at startup via `inject_devices()`, and per-device routing hints live in `device.listener_options` — and makes exactly one call — **`self.deliver(device, ...)`**, defined in [`api/connector.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/api/connector.py), which runs two steps inside one guard:
 
 1. **`device.receive(...)`** parses the raw transport data into `self.data` and returns whether the payload produced a usable update. `False` means it did not — a CRC failure, a truncated frame, a topic the device does not model. `None` still counts as accepted, so a device written before this contract existed keeps working.
-2. **`self.on_device_data_received(device, accepted)`**, passing exactly what `receive()` returned. This hook, defined in [`api/connector.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/api/connector.py), is where the framework takes over.
+2. **`on_device_data_received(device, accepted)`**, passing exactly what `receive()` returned. This hook is where the framework takes over.
+
+The two are one call because one of them has to be guarded. A device is a plugin contracted never to raise; one that does used to escape the connector's `start()`, spend the supervisor's restart budget and leave `main` reading a finished worker as "all connectors finished" — shutting the EMS down over one device's bug. `deliver()` logs the traceback, drops the reading and returns `False` instead.
 
 The hook does four things, in an order that is worth quoting the reasoning for:
 

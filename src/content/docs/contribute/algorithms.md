@@ -38,7 +38,7 @@ A walkthrough, line by line:
 - **`isinstance(device, EnergyMeter)`** is the load-bearing line. `P1` *is* an `EnergyMeter`; so is any meter written next year, and this algorithm picks it up without a diff.
 - **`energy is None`** is a real branch, not defensive noise: an `EnergyMeter` returns `None` for a configured source it cannot read, and `0.0` for a well-formed payload with no kWh register — the distinction is explained on [/contribute/devices/](/contribute/devices/).
 - **`isinstance(device, Switch) and device.data`** selects actuators that have produced data. `COMMAND_ON` / `COMMAND_OFF` come from the device, because hardware that does not speak literal `on`/`off` overrides the tokens.
-- **`self.control_device(device, command)`** routes the command to the *live* device (not your snapshot copy) and logs the decision to storage.
+- **`self.control_device(device, command)`** routes the command to the *live* device (not your snapshot copy) and logs the decision to storage **when the command reached a transport**. It returns that verdict as a `bool`; a device that is not writable, or whose connector never loaded, produces no decision row and no entry in `algorithm_decisions.csv`.
 
 ## Select by capability, never by concrete class
 
@@ -58,11 +58,13 @@ The corollaries:
 - Never talk to a transport. `control_device()` is the only way out, and the connector on the other side deals with the wire.
 - Cooperative stop is free: the base `loop()` polls the stop event, so `Ctrl+C` lands between steps rather than inside one ([/architecture/lifecycle/](/architecture/lifecycle/)).
 
-## No options schema, by design
+## Your options schema
 
-Connectors, devices, storage backends and services each ship a `*.schema.json` beside the module. Algorithms deliberately do not. The constructor *is* the contract: every key in your config entry's `options` arrives as a keyword argument, an unknown key raises `TypeError`, and the plugin loader reports the entry as "could not be instantiated". That `TypeError` at load time is the validation — a second, hand-maintained schema would only be one more thing to drift.
+Every axis ships a `*.schema.json` beside the module, algorithms included. The constructor is still the real gate — an unknown key arrives as a keyword argument, raises `TypeError`, and the loader reports the entry as "could not be instantiated" — but the schema turns that into a warning at config load, naming the key, before anything is constructed.
 
-Forward `**kwargs` to `super().__init__` — the base reads `delay_seconds`, `required_devices` and `wait_for_devices_timeout` straight from your options:
+Copy [`algorithms/auto_toggle.schema.json`](https://github.com/Motrix-Energy/motrix-edge/blob/main/algorithms/auto_toggle.schema.json). If your algorithm adds no options of its own, that file is yours unchanged: the three the base class reads are the whole contract. Leave `devices_manager` out — `main` injects it, and declaring it would let a config entry collide with the injected value.
+
+Forward `**kwargs` to `super().__init__` — the base reads `delay_seconds`, `required_devices` and `wait_for_devices_timeout` straight from your options, and coerces all three through `api/options.py`, so a `${VAR}` that arrives as a string warns and falls back instead of crashing your worker thread. The lockstep check follows `**kwargs` up the MRO, which is why those three count as your options for schema purposes even though you never name them:
 
 ```python
 from typing import override

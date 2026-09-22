@@ -29,7 +29,7 @@ The `pseudo` connector replays a `topic` and a `payload` column out of a CSV —
 Two practical consequences:
 
 - **Parse from strings, always.** The same code path must run live and under replay; a replay connector declares `emulates` and impersonates your transport, so your device is backtestable without ever knowing about `pseudo` — see [/architecture/time-and-replay/](/architecture/time-and-replay/).
-- **Accept the two-argument arity even if your connector only ever sends one.** A replay row with a non-empty `topic` column otherwise raises a `TypeError` that the replay loop swallows, and the backtest silently produces nothing.
+- **Accept **both** arities even if your connector only ever sends one — a replay row with a `topic` column arrives as `receive(topic, payload)` and one without as `receive(payload)`.** A device that accepts only one shape raises `TypeError` on every row of the other. `Connector.deliver` catches that and logs one traceback against the device, so it is no longer silent — but it is still a backtest that produces no readings for it.
 
 ## Never invent a reading
 
@@ -43,6 +43,8 @@ CONTRIBUTING states the principle in one line, worth keeping above your editor:
 > Losing a sample is acceptable; inventing one is not.
 
 A flat line is the more expensive lie because it looks like evidence. Downstream, a gap in the CSV means precisely "no reading received" — one of the storage format's chart-trust caveats, covered on [/reference/storage-format/](/reference/storage-format/). See [`devices/p1.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/devices/p1.py) for the failure path and [`devices/shelly_plug.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/devices/shelly_plug.py) for the unmodelled-topic one.
+
+The same rule covers a transport your device cannot serve at all, and there it is a **declaration rather than a branch**: set `SUPPORTED_PROTOCOLS` on the class, and make `refuse_unserved_protocol()` the first line of `receive()`. The base class logs one error at startup naming the protocol, and every payload afterwards is refused rather than parsed. Do not raise — a device is a plugin, and although the connector now contains an exception rather than letting it end the run, being caught by the guard meant for a *device bug* is the wrong way for a plain wiring mistake to surface.
 
 ## `Switch` is a type claim — split the class
 

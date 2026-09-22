@@ -11,8 +11,9 @@ with a link to the page where the concept lives in full.
 The actual core of the EMS: the logic that reads devices and decides what to do. An
 algorithm consumes devices by capability (`isinstance(device, EnergyMeter)`), never by
 concrete class, which is what lets the same `main()` backtest over a CSV replay and run
-live over MQTT without changing a line. Algorithms are the one plugin axis that ships no
-options schema, by design. See [Recipe: algorithms](/contribute/algorithms/).
+live over MQTT without changing a line. Algorithms validate their options against
+`algorithms/<class>.schema.json` like every other axis; the constructor is still the gate
+behind it. See [Recipe: algorithms](/contribute/algorithms/).
 
 ### Backtest / replay
 
@@ -37,6 +38,16 @@ after a whole timestep has been dispatched. It is what triggers algorithm steps 
 stamps `algorithm_decisions.csv` — a decision computed while processing T belongs to T
 even if the replay has already moved on. See
 [Time, replay and determinism](/architecture/time-and-replay/).
+
+### Config format version
+
+The optional top-level `version` in `config.json`, declaring the format of that document —
+never the EMS release, which has no constant to compare against. An equal or older minor
+passes silently, a newer minor warns that unknown keys are being ignored, and either major
+mismatch is an error; omitting the key is not a claim and draws no verdict at all. Not to be
+confused with the **storage format** below, which versions the CSV files the EMS *writes*
+and is pinned in four places across two repositories. This one is read rather than published — no data file
+carries it — though `config.schema.json`'s own comment is kept in lockstep with it by a test. See [Configuration](/operate/configuration/).
 
 ### Connector
 

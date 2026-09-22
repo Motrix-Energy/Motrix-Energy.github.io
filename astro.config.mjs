@@ -105,6 +105,7 @@ export default defineConfig({
 						{ label: 'Devices and capabilities', slug: 'contribute/devices' },
 						{ label: 'Algorithms', slug: 'contribute/algorithms' },
 						{ label: 'Storage backends and services', slug: 'contribute/storage-and-services' },
+						{ label: 'Publishing a plugin', slug: 'contribute/publishing-plugins' },
 						{ label: 'Contributing to Edge View', slug: 'contribute/viewer' },
 						{ label: 'Changing the storage format', slug: 'contribute/storage-format-changes' },
 					],

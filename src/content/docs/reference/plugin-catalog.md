@@ -71,14 +71,15 @@ claim — see [Recipe: devices and capabilities](/contribute/devices/).
 
 ## Algorithms
 
-Algorithms ship **no options schema, by design** — the constructor signature is the
-options contract, enforced by `TypeError` at load time. See
+Algorithms ship an options schema like every other axis. Both shipped ones take only the
+three the base class reads — `delay_seconds`, `required_devices`,
+`wait_for_devices_timeout` — so their two schemas are identical by construction. See
 [Recipe: algorithms](/contribute/algorithms/).
 
-| Name | Purpose |
-|---|---|
-| [`auto_toggle`](https://github.com/Motrix-Energy/motrix-edge/blob/main/algorithms/auto_toggle.py) | The public worked example: sums every `EnergyMeter`, switches every `Switch` on or off across a threshold. Seventeen lines, fully capability-based |
-| [`device_checker`](https://github.com/Motrix-Energy/motrix-edge/blob/main/algorithms/device_checker.py) | A diagnostic: logs which devices currently hold data and which do not |
+| Name | Purpose | Schema |
+|---|---|---|
+| [`auto_toggle`](https://github.com/Motrix-Energy/motrix-edge/blob/main/algorithms/auto_toggle.py) | The public worked example: sums every `EnergyMeter`, switches every `Switch` on or off across a threshold. Seventeen lines, fully capability-based | [`auto_toggle.schema.json`](https://github.com/Motrix-Energy/motrix-edge/blob/main/algorithms/auto_toggle.schema.json) |
+| [`device_checker`](https://github.com/Motrix-Energy/motrix-edge/blob/main/algorithms/device_checker.py) | A diagnostic: logs which devices currently hold data and which do not | [`device_checker.schema.json`](https://github.com/Motrix-Energy/motrix-edge/blob/main/algorithms/device_checker.schema.json) |
 
 ## Storage backends
 

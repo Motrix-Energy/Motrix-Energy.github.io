@@ -28,6 +28,18 @@ pip install -r requirements-lora.txt           # lora serial connector (pyserial
 
 The `lorawan` and `openems` connectors need no extra — one is MQTT and the other subclasses the HTTP connector, both on core dependencies. Why the import sits at module top rather than inside `start()` — where it would be a crash loop instead of a clean skip — is the first footgun on [connector patterns](/contribute/connector-patterns/).
 
+### The log complains about the configuration version
+
+**Cause.** `config.json`'s optional top-level `version` declares the format of that file, and the build compares it against the one format it understands. A *warning* means a newer minor — the file was written against a newer format, so anything in it this build's schema does not know is being ignored without comment. An *error* means the majors differ, where a key can have been renamed or changed meaning, so the file may be read wrongly rather than incompletely. A warning that the version could not be read means it is not three numbers — often a `${VAR}`, which is not resolved in this key because a document's format is a property of the document and not of the machine reading it.
+
+**Fix.** Each message names the action: set `"version"` to three numbers, rewrite the file against the `config.schema.json` this build ships, or upgrade Motrix Edge. Omitting the key entirely is also valid and draws no verdict — absence is not a claim. Nothing here is ever fatal, so a run that logged one of these still started; what it means is that the wiring you read and the wiring the EMS read may not be the same document. The full table is on [Configuration](/operate/configuration/).
+
+### A device is configured, starts, and never reports
+
+**Cause.** The device cannot parse anything the connector it names delivers. Each device declares which transports it serves, and one wired to any other logs a single error at startup — naming the protocol and why that transport cannot carry its payload — then refuses every payload afterwards. This is **not** a skip: the device exists, appears in `/devices` and is marked connected, because payloads really are arriving; it simply never becomes data-ready, so an algorithm waiting on it waits forever. The commonest cause by far is a replay: a `pseudo` connector without `emulates` hands the device the literal protocol `pseudo`, which no real device kind claims.
+
+**Fix.** Read the startup error — it names the fix, and for a replay that fix is one line, `"emulates": "mqtt"` (or whichever transport the device expects) in the connector's options. Otherwise point the device at a connector whose protocol it serves, or use the device kind that does serve the one you have. How a replay impersonates a live transport is on [Time, replay and determinism](/architecture/time-and-replay/).
+
 ### The process exits immediately when only services are configured
 
 **Cause.** By design. Liveness is connector-shaped: `main` waits on the connectors only, so a service — a supervised worker that owns no devices — never keeps a finished replay alive. A config with services and no connectors therefore has nothing to wait on and exits immediately, logging a warning that says so.
@@ -36,15 +48,15 @@ The `lorawan` and `openems` connectors need no extra — one is MQTT and the oth
 
 ### A replay produces no readings
 
-**Cause.** The device's `receive()` does not accept the replay's calling arity. `PseudoConnector` replays a `topic` and a `payload` column, both strings — and calls `receive()` with both when the `topic` cell is non-empty. A device written for a single-argument transport that declares `receive(self, payload)` raises `TypeError` on every row, the replay loop swallows it, and the backtest silently produces nothing.
+**Cause.** The device's `receive()` does not accept the replay's calling arity. `PseudoConnector` replays a `topic` and a `payload` column, both strings — and calls `receive()` with both when the `topic` cell is non-empty. A device written for a single-argument transport that declares `receive(self, payload)` raises `TypeError` on every row. `Connector.deliver` catches that and logs one traceback against the device — quietly after the first — so the backtest produces no readings for it, and the log names which device rather than blaming the replay file.
 
-**Fix.** Accept the two-argument arity even if your connector only ever sends one — the shipped devices declare `receive(self, *args, **kwargs)`. This is a contract, not an accident: every argument is a `str` so the same production parser runs under replay, per [the device recipe in `CONTRIBUTING.md`](https://github.com/Motrix-Energy/motrix-edge/blob/main/CONTRIBUTING.md#recipe-add-a-new-device). How the replay impersonates a live transport via `emulates` is on [Time, replay and determinism](/architecture/time-and-replay/).
+**Fix.** Accept **both** arities even if your connector only ever sends one — the shipped devices declare `receive(self, *args, **kwargs)`. This is a contract, not an accident: every argument is a `str` so the same production parser runs under replay, per [the device recipe in `CONTRIBUTING.md`](https://github.com/Motrix-Energy/motrix-edge/blob/main/CONTRIBUTING.md#recipe-add-a-new-device). How the replay impersonates a live transport via `emulates` is on [Time, replay and determinism](/architecture/time-and-replay/).
 
 ### A chart shows a flat line where a gap should be
 
 **Cause.** A connector that calls `on_device_data_received(device)` without forwarding what `receive()` returned. A device returns `False` when a payload gave it nothing usable — a CRC error, a truncated frame, an unmodelled topic — and forwarding that `False` is what keeps the corrupt frame out of storage. Swallow it and the connector republishes the device's unchanged `self.data` under a new timestamp: a stalled meter shows up as a flat line instead of missing data.
 
-**Fix.** Pass the return value through: `self.on_device_data_received(device, accepted)` where `accepted` is exactly what `device.receive(...)` returned. The full path from wire to decision, including what `accepted=False` suppresses, is on [Data flow](/architecture/data-flow/). Losing a sample is acceptable; inventing one is not.
+**Fix.** Hand the payload over with `self.deliver(device, payload)`, which forwards what `device.receive(...)` returned for you. A connector that still calls the two steps by hand can drop the value on the floor; `deliver()` cannot. The full path from wire to decision, including what `accepted=False` suppresses, is on [Data flow](/architecture/data-flow/). Losing a sample is acceptable; inventing one is not.
 
 ### `/api/health` returns 502 through the viewer
 

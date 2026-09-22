@@ -154,7 +154,7 @@ Common fields per worker: `name`, `axis` (`connector` | `algorithm` | `service` 
 | `running` | the thread is alive |
 | `finished` | returned cleanly — a replay that ran to its end. A worker that crashed twice, restarted, and later returned cleanly is `finished` with `crashes: 2`, which is the honest report |
 | `down` | exhausted its restart budget |
-| `lost` | the thread died without the supervisor noticing — the one state no other surface can produce, and what a `SystemExit` escaping a library would cause |
+| `lost` | the thread died without the supervisor noticing — the one state no other surface can produce. Unreachable for a worker the supervisor actually started, since `_finished` is now set from a `finally`; what remains are a worker constructed but never started, and a daemon thread caught by interpreter shutdown |
 
 Connectors additionally report their `devices` (names only). Algorithms additionally
 report `delay_seconds`, `required_devices`, `wait_for_devices_timeout`, `runs`,

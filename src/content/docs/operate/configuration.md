@@ -48,18 +48,39 @@ Order is config order: plugins are instantiated into a list, never a set, so two
 
 ## Validation is two-layer
 
-`config.schema.json` covers only the document's shape — the arrays, the required `name`/`protocol`/`kind`/`class` keys. Each entry's `options` object is validated against the schema shipped *next to the plugin it names* (`connectors/mqtt.schema.json`, `devices/p1.schema.json`, …), so adding a plugin never touches the root schema. Schema findings are warnings, never fatal: the real contract is the constructor signature, enforced by `TypeError` at instantiation. The full mechanism, including the naming convention and the kwargs contract, is on [the plugin system](/architecture/plugins/).
+`config.schema.json` covers only the document's shape — the arrays, the required `name`/`protocol`/`kind`/`class` keys, the optional top-level `version`, and the `runtime` block. Each entry's `options` object is validated against the schema shipped *next to the plugin it names* (`connectors/mqtt.schema.json`, `devices/p1.schema.json`, …), so adding a plugin never touches the root schema. Schema findings are warnings, never fatal: the real contract is the constructor signature, enforced by `TypeError` at instantiation. The full mechanism, including the naming convention and the kwargs contract, is on [the plugin system](/architecture/plugins/).
 
 ## Interpolation happens after validation
 
 `${VAR}` and `${VAR:-default}` resolve from the environment when the config is loaded — so secrets stay out of the file — and they resolve **after** schema validation. Two consequences follow, and both are visible in the shipped schema files:
 
 - An interpolated value is always a string, or `null` when a whole-value token resolves empty. A schema field that can be written as `${VAR}` therefore accepts `"string"` and `"null"` beside its natural type, or validation would reject the very configs interpolation exists for.
-- Option coercion never raises. [`api/options.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/api/options.py) turns those strings into numbers and booleans by **warning and falling back to the default** — a `ValueError` escaping a plugin's `__init__` would escape the loader too and take the whole process down over one mistyped tuning knob.
+- Option coercion never raises. [`api/options.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/api/options.py) turns those strings into numbers and booleans by **warning and falling back to the default**. The loader contains a `ValueError` escaping a plugin's `__init__` — it logs the traceback and skips that entry — but a skipped entry is a plugin that is simply not there: no readings, no actuator, no service at the port. Losing a whole meter over one mistyped tuning knob is the wrong trade when the option has a perfectly good default.
 
 :::caution
 `python main.py` reads `os.environ` directly and loads no dotenv file. If your variables live in `.env`, export them first — the one-liners are on [Docker and compose profiles](/operate/docker/).
 :::
+
+## The version key
+
+The optional top-level `version` declares the format of **this file**, not the release that reads it. Nothing else it could mean would be useful: a config cannot know which build will load it, and the file is mounted read-only into the container by design, so a number an operator had to edit on every upgrade would be a liability rather than a signal.
+
+An EMS build understands one config format — `CONFIG_FORMAT_VERSION` in [`config/version.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/config/version.py), currently `1.0.0` — and compares yours against it component by component:
+
+| Declared | What the EMS does |
+|---|---|
+| Absent, `null` or empty | Nothing. Omitting the key is not a claim, so it draws no verdict, and `Config.version` reads as null. |
+| Equal, or any patch difference | Nothing. A patch changes no shape at all. |
+| An older minor | Nothing. Minor versions are additive, so this build understands every key an older one can hold. |
+| A newer minor | Warns. The file was written against a newer format, and anything it declares that this build's schema does not know is ignored without comment. |
+| Either major mismatch | Errors. Across a major version a key can have been renamed or changed meaning, so the file may be read *wrongly* rather than incompletely. |
+
+**None of it is ever fatal**, including a major mismatch — `Config` is built before the shutdown path exists, so an error is the loudest thing the loader can honestly do, and the run continues. There is also no automatic migration, and deliberately so: a migrator would have nowhere to write, and rewriting an operator's wiring unseen is not a thing a system that closes relays should do.
+
+Two smaller rules follow from "it describes the document":
+
+- **`${VAR}` does not belong here.** A document's format is a property of the document, not of the machine reading it, so the key is read from the raw file *before* interpolation — which is what lets the loader name the template in a warning instead of reporting a mysterious null.
+- **A plugin's own options are versioned by its `*.schema.json`**, beside the constructor it must stay in lockstep with, and never by this number.
 
 ## The runtime block
 
