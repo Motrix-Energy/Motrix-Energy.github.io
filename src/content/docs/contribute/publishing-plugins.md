@@ -50,6 +50,7 @@ motrix-edge-connector-solarvendor/
 	connectors/acme/solar.py
 	connectors/acme/solar.schema.json
 	tests/test_solar.py          # imports api.testing, runs api.conformance
+	conftest.py                  # finds a motrix-edge checkout - see below
 	LICENSE                      # extensionless
 	README.md
 ```
@@ -57,12 +58,140 @@ motrix-edge-connector-solarvendor/
 Keep `LICENSE` extensionless: `.dockerignore` strips `*.md`, so a `LICENSE.md` would be missing from
 a locally built image, and the image is a distribution.
 
+## Testing it from your own repository
+
 Test it the way the shipped plugins are tested. The axis-generic doubles and threading harness live
 in [`api/testing.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/api/testing.py) and the
 checks in [`api/conformance.py`](https://github.com/Motrix-Energy/motrix-edge/blob/main/api/conformance.py);
 both import from anywhere. Run `check_loads` first — it drives the real loader, so it catches the
 class-naming and `issubclass` mistakes a schema check cannot see. Neither module is a supported API
 yet.
+
+The one piece of scaffolding you need is making those imports resolve, because `motrix-edge` is not a
+distribution — there is no `pip install motrix-edge`. An operator does not have this problem: they
+copy your directory into a checkout, where everything is simply importable. A test run has to arrange
+the same thing temporarily.
+
+:::caution[`sys.path` is not enough, and a second `__init__.py` is worse]
+The axis packages are **regular** packages, so `import connectors` resolves to the runtime's copy and
+stops — your `connectors/acme/` is unreachable wherever your repository sits on `sys.path`. Shipping
+your own `connectors/__init__.py` is the wrong fix: whichever copy wins `sys.path` wins outright, and
+a plugin repository that won would make every built-in connector silently unreachable.
+
+Extend the real package's `__path__` instead. That is the local equivalent of the copy an operator
+performs.
+:::
+
+```python
+# conftest.py — put a motrix-edge checkout on sys.path, and make the axis see your vendor directory.
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+CANDIDATES = [
+	os.environ.get("MOTRIX_EDGE"),          # what CI sets after cloning
+	os.path.join(HERE, "motrix-edge"),
+	os.path.join(os.path.dirname(HERE), "motrix-edge"),
+]
+
+AXES = ["connectors"]                       # every axis your repository contributes to
+
+
+def _runtime_root() -> str:
+	for candidate in CANDIDATES:
+		if candidate and os.path.isfile(os.path.join(candidate, "api", "connector.py")):
+			return os.path.abspath(candidate)
+	# Fail loudly. A suite that reports zero tests because it could not find the runtime is
+	# the exact failure api/conformance.py exists to prevent.
+	raise RuntimeError(
+		"Could not find a motrix-edge checkout. Set MOTRIX_EDGE, or clone it beside this "
+		"repository: git clone --depth 1 https://github.com/Motrix-Energy/motrix-edge"
+	)
+
+
+sys.path.insert(0, _runtime_root())
+
+for _axis in AXES:
+	_local = os.path.join(HERE, _axis)
+	if os.path.isdir(_local):
+		_package = __import__(_axis)
+		if _local not in _package.__path__:
+			_package.__path__.append(_local)
+```
+
+:::danger[What that trick does *not* buy you]
+**Imports merge across `__path__`; resources do not.** `importlib.resources.files()` returns the
+first portion only, so a schema reached this way is invisible to `Config` — your options would go
+unvalidated while everything appears to work. It is the same trap `pkgutil.extend_path` sets.
+
+This never bites an operator, because a copied directory is physically inside the package. It matters
+to *you*, and it is exactly why the checks in `api/conformance.py` take a **directory** argument
+rather than deriving one from a package name. Use `conformance.axis_directory(...)` and they are
+unaffected.
+:::
+
+Mind the two package names while you are there. The schema checks look at *your module*, so they take
+the **vendor** package (`connectors.acme`). The loader takes the **axis** package (`connectors`) and
+appends the config value, which already carries the vendor. Mixing them up produces
+`connectors.acme.acme.solar`.
+
+```python
+# tests/test_solar.py
+import os
+
+from api import conformance
+from api.connector import Connector
+
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIRECTORY = conformance.axis_directory(HERE, "connectors.acme")
+
+def test_the_schema_and_the_constructor_agree():
+	report = conformance.check_kwargs_lockstep(DIRECTORY, "connectors.acme", "connector")
+	assert report.checked, "nothing checked — check the module and class names"
+	assert report.ok, report.describe()
+
+def test_the_real_loader_can_construct_it():
+	report = conformance.check_loads(
+		{"name": "roof", "protocol": "acme.solar", "options": {"host": "10.0.0.7"}},
+		"protocol", "connectors", Connector, expected_name_suffix="connector",
+	)
+	assert report.ok, report.describe()
+```
+
+And a CI job, which clones the runtime rather than installing it. The three security settings are
+copied from `motrix-edge`'s own workflow: a plugin repository has no reason to be laxer than the
+runtime it extends.
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on: [push, pull_request]
+
+permissions:
+  contents: read          # not read/write: no step here publishes anything
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false   # or the token stays in .git/config for the whole job
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - run: git clone --depth 1 https://github.com/Motrix-Energy/motrix-edge.git "$RUNNER_TEMP/motrix-edge"
+      - run: pip install -r "$RUNNER_TEMP/motrix-edge/requirements.txt" pytest ruff
+      - run: ruff check .
+      - env:
+          MOTRIX_EDGE: ${{ runner.temp }}/motrix-edge
+        run: pytest
+```
+
+Both actions are pinned by commit SHA, not by tag: a tag is mutable, and a compromised action runs
+with whatever the job's token can reach. Pin the `motrix-edge` clone to a ref once your plugin
+depends on something newer than `main`.
 
 ## Installing one
 
