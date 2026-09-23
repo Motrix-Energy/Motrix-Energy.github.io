@@ -45,6 +45,8 @@ sequenceDiagram
 
 The barrier degrades loudly rather than silently. A step that overruns `step_timeout_seconds` (default 30s) is logged — first occurrence at ERROR — and the replay advances anyway, with the message stating plainly that the backtest is no longer deterministic. A determinism guarantee that silently stopped holding would be worse than a run that is visibly stuck.
 
+A crash does not open the barrier either. An algorithm whose `main()` raises stays a participant while the supervisor backs off and restarts it, so the replay waits at the next timestep rather than running ahead — the step it died on is acknowledged and never re-run, and none after it is skipped. It leaves the barrier only when the supervisor gives up on it ([Lifecycle](/architecture/lifecycle/)). A backoff longer than `step_timeout_seconds` still ends in the loud timeout above.
+
 ## Why one `main()` backtests and runs live unchanged
 
 An algorithm's base `loop()` chooses its cadence per iteration: when a replay connector drives the clock, it steps `main()` once per committed timestep; otherwise it runs on a `delay_seconds` wall-clock cadence. The algorithm's own code contains nothing about time or transport — it reads the current moment through `get_simulation_time()`, which is stable for the whole of one `main()`.

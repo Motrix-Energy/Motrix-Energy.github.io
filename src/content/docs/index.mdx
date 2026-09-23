@@ -37,7 +37,11 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 		config entry. There is no registry to edit and no import to add — which is the whole
 		point. See [the plugin system](/architecture/plugins/).
 	</Card>
-	<Card title="Deterministic replay" icon="clock">
+	{/* "seti:clock", not "clock". Icons.ts exports { ...BuiltInIcons, ...FileIcons }, and
+	    the clock lives in the Seti set behind the "seti:" prefix. A bare "clock" is not a
+	    key of either, and an unknown name renders an empty square rather than failing the
+	    build — so it shipped blank. */}
+	<Card title="Deterministic replay" icon="seti:clock">
 		The `pseudo` connector replays a CSV through the same code paths as live hardware,
 		in lockstep with the algorithms, so the same run produces the same bytes every time.
 		Algorithms cannot tell — that is the test. See

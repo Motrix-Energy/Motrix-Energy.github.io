@@ -45,9 +45,12 @@ export default defineConfig({
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/Motrix-Energy' },
 			],
-			editLink: {
-				baseUrl: 'https://github.com/Motrix-Energy/Motrix-Energy.github.io/edit/main/',
-			},
+			// No editLink, deliberately. Starlight renders "Edit page" only when a baseUrl is
+			// set here, and the link it produces opens GitHub's web editor pointed at main —
+			// inviting a reader to commit straight to the branch that deploys. The docs are also
+			// not the normative source for most of what they describe: a correction usually
+			// belongs in motrix-edge or motrix-edge-view, and a page edited here would silently
+			// disagree with the repository it documents. Report it on the tracker instead.
 			components: {
 				SiteTitle: './src/components/SiteTitle.astro',
 				// Dark-only: force the theme and remove the toggle.
